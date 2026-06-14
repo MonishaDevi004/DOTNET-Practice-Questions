@@ -1,0 +1,252 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+xmlns:w="urn:schemas-microsoft-com:office:word"
+xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>Citykart Code Analysis Exam</title>
+<style>
+body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: auto; padding: 20px;}
+h1 { color: #004085; border-bottom: 2px solid #004085; padding-bottom: 10px; }
+h2 { color: #333; font-size: 1.2em; margin-top: 30px; }
+pre { background-color: #f4f4f4; padding: 15px; border-radius: 5px; font-family: Consolas, monospace; color: #d63384; border-left: 4px solid #004085;}
+.bug { color: #dc3545; font-weight: bold; }
+.fix { color: #198754; font-weight: bold; }
+hr { border: 0; border-top: 1px solid #eee; margin: 30px 0; }
+</style>
+</head>
+<body>
+
+<h1>Citykart Technical Assessment: Section 2</h1>
+<p><strong>Topic: Code Analysis & Debugging (C# & .NET Web API)</strong></p>
+<p>This document contains 20 high-complexity debugging and code analysis scenarios modeled after real-world retail enterprise systems (Inventory, POS, Billing, and high-traffic APIs).</p>
+<hr>
+
+<h2>Q1. Dependency Injection Scope Mismatch (Captive Dependency)</h2>
+<pre>
+public class PosSyncBackgroundService : BackgroundService
+{
+    private readonly CityKartDbContext _dbContext;
+    public PosSyncBackgroundService(CityKartDbContext dbContext) 
+    { 
+        _dbContext = dbContext; 
+    }
+    protected override async Task ExecuteAsync(CancellationToken stoppingToken) { /* ... */ }
+}
+</pre>
+<p><span class="bug">The Bug:</span> CityKartDbContext is registered as a Scoped service by default. BackgroundService is a Singleton. Injecting a Scoped service into a Singleton creates a "captive dependency." The DbContext will live forever, leading to memory leaks, stale data, and database connection pool exhaustion.</p>
+<p><span class="fix">The Fix:</span> Inject IServiceScopeFactory into the background service. Inside ExecuteAsync, call _scopeFactory.CreateScope() and resolve the CityKartDbContext from the newly created scope.</p>
+
+<h2>Q2. Asynchronous Thread Pool Starvation</h2>
+<pre>
+[HttpPost("checkout")]
+public IActionResult ProcessCheckout([FromBody] CheckoutDto request)
+{
+    var paymentResult = _billingService.ProcessPaymentAsync(request.CartId).Result;
+    return Ok(paymentResult);
+}
+</pre>
+<p><span class="bug">The Bug:</span> Using .Result (or .Wait()) synchronously blocks the executing thread until the asynchronous payment process completes. Under high traffic (like a Citykart flash sale), this will rapidly consume all available worker threads, causing thread pool starvation and application deadlocks.</p>
+<p><span class="fix">The Fix:</span> Make the controller action asynchronous: public async Task&lt;IActionResult&gt; ProcessCheckout(...) and use await _billingService.ProcessPaymentAsync(...).</p>
+
+<h2>Q3. Entity Framework Core Cartesian Explosion</h2>
+<pre>
+var catalogs = await _db.Stores
+    .Include(s => s.Inventories)
+    .Include(s => s.Employees)
+    .Include(s => s.DailyTransactions)
+    .ToListAsync();
+</pre>
+<p><span class="bug">The Bug:</span> Including multiple collection navigation properties in a single query generates a massive SQL JOIN query. The database returns the Cartesian product of Stores &times; Inventories &times; Employees &times; Transactions, transferring massive amounts of redundant data and crushing database performance.</p>
+<p><span class="fix">The Fix:</span> Append .AsSplitQuery() to the LINQ chain. EF Core will split this into multiple smaller, efficient queries and stitch the objects together in memory.</p>
+
+<h2>Q4. IQueryable vs IEnumerable Performance Trap</h2>
+<pre>
+IEnumerable&lt;Product&gt; products = _db.Products;
+var lowStockItems = products.Where(p => p.StockLevel < 10).ToList();
+</pre>
+<p><span class="bug">The Bug:</span> Because _db.Products is implicitly cast to IEnumerable, the .Where() clause is executed in-memory rather than in the database. EF Core pulls the entire product table into application memory before filtering, causing severe memory spikes.</p>
+<p><span class="fix">The Fix:</span> Keep the type as IQueryable&lt;Product&gt; or use var, ensuring the WHERE clause translates to SQL.</p>
+
+<h2>Q5. Async Void Exception Swallowing</h2>
+<pre>
+public async void LogTransactionToAuditDb(Transaction tx)
+{
+    await _auditService.SaveAsync(tx);
+}
+</pre>
+<p><span class="bug">The Bug:</span> async void methods are "fire-and-forget" but exceptions thrown inside them cannot be caught by the caller. If SaveAsync fails, it will raise an unhandled exception on the synchronization context, crashing the entire ASP.NET Core host process.</p>
+<p><span class="fix">The Fix:</span> Always return async Task instead of async void, unless it is a top-level UI event handler.</p>
+
+<h2>Q6. Lost Updates in Inventory Concurrency</h2>
+<pre>
+var item = await _db.Inventory.FindAsync(itemId);
+item.Stock -= quantityPurchased;
+await _db.SaveChangesAsync();
+</pre>
+<p><span class="bug">The Bug:</span> If two POS terminals sell the same item at the exact same millisecond, both read the same initial stock. Terminal B overwrites Terminal A's deduction, leading to a "Lost Update" and inaccurate stock levels.</p>
+<p><span class="fix">The Fix:</span> Implement Optimistic Concurrency. Add a [Timestamp] byte[] RowVersion to the Inventory entity and handle the DbUpdateConcurrencyException to retry the transaction.</p>
+
+<h2>Q7. Deferred Execution causing ObjectDisposedException</h2>
+<pre>
+public IEnumerable&lt;Customer&gt; GetTopCustomers()
+{
+    using (var context = new CityKartDbContext())
+    {
+        return context.Customers.Where(c => c.LoyaltyPoints > 5000);
+    }
+}
+</pre>
+<p><span class="bug">The Bug:</span> LINQ uses deferred execution. The query is not executed until the caller iterates over the returned IEnumerable. By the time the caller iterates, the using block has already disposed of the DbContext, throwing an ObjectDisposedException.</p>
+<p><span class="fix">The Fix:</span> Append .ToList() before returning to force execution while the DbContext is still alive.</p>
+
+<h2>Q8. HTTP Client Socket Exhaustion</h2>
+<pre>
+public async Task SendSmsAlert(string message)
+{
+    using (var client = new HttpClient())
+    {
+        await client.PostAsync("https://sms-gateway.citykart", ...);
+    }
+}
+</pre>
+<p><span class="bug">The Bug:</span> Creating and disposing of HttpClient in a high-traffic loop leaves sockets in the TIME_WAIT state. The server will run out of available sockets, causing new connections to fail.</p>
+<p><span class="fix">The Fix:</span> Use IHttpClientFactory to manage client pooling, or use a single static HttpClient instance.</p>
+
+<h2>Q9. N+1 Query Problem</h2>
+<pre>
+var orders = _db.Orders.ToList();
+foreach (var order in orders)
+{
+    var total = order.OrderItems.Sum(i => i.Price); // OrderItems is lazy-loaded
+}
+</pre>
+<p><span class="bug">The Bug:</span> The first query loads a batch of orders. The loop then triggers separate database queries to load the OrderItems for each individual order, causing massive database latency.</p>
+<p><span class="fix">The Fix:</span> Eagerly load the related data in the initial query: _db.Orders.Include(o => o.OrderItems).ToList();</p>
+
+<h2>Q10. Unsafe Static Dictionary (Race Condition)</h2>
+<pre>
+private static Dictionary&lt;string, int&gt; _apiRateLimits = new Dictionary&lt;string, int&gt;();
+
+public void IncrementRequest(string ipAddress)
+{
+    if (!_apiRateLimits.ContainsKey(ipAddress))
+        _apiRateLimits[ipAddress] = 1;
+    else
+        _apiRateLimits[ipAddress]++;
+}
+</pre>
+<p><span class="bug">The Bug:</span> Standard generic Dictionary is not thread-safe. Concurrent requests hitting this static method will corrupt the internal state of the dictionary, leading to an infinite loop or runtime crashes.</p>
+<p><span class="fix">The Fix:</span> Use ConcurrentDictionary&lt;string, int&gt; and utilize the AddOrUpdate method.</p>
+
+<h2>Q11. Modifying Collection During Iteration</h2>
+<pre>
+foreach (var item in cart.Items)
+{
+    if (item.Stock == 0) cart.Items.Remove(item);
+}
+</pre>
+<p><span class="bug">The Bug:</span> Attempting to remove an item from a collection while iterating over it via foreach alters the collection's enumerator state, throwing an InvalidOperationException.</p>
+<p><span class="fix">The Fix:</span> Use cart.Items.RemoveAll(i => i.Stock == 0); or iterate backwards using a standard for loop.</p>
+
+<h2>Q12. Over-posting (Mass Assignment) Vulnerability</h2>
+<pre>
+[HttpPut("update-profile")]
+public IActionResult UpdateProfile([FromBody] User dbUser)
+{
+    _db.Users.Update(dbUser);
+    _db.SaveChanges();
+    return Ok();
+}
+</pre>
+<p><span class="bug">The Bug:</span> Binding external JSON directly to the database Entity allows malicious users to inject properties they shouldn't control. A user could send {"Role": "Admin"} in the payload, granting themselves administrative access.</p>
+<p><span class="fix">The Fix:</span> Bind to a Data Transfer Object (DTO) containing only safe, modifiable fields, then map those fields to the tracked DB entity.</p>
+
+<h2>Q13. EF Core Client-Side Evaluation Crash</h2>
+<pre>
+var promos = _db.Promotions
+    .Where(p => CustomDateParser(p.ExpiryDate) > DateTime.UtcNow)
+    .ToList();
+</pre>
+<p><span class="bug">The Bug:</span> EF Core cannot translate the C# method CustomDateParser into SQL. In .NET Core 3.0+, this throws an InvalidOperationException to prevent accidental downloading of the entire table.</p>
+<p><span class="fix">The Fix:</span> Ensure data in the DB is stored as standard date types so you can query directly: p.ExpiryDate > DateTime.UtcNow.</p>
+
+<h2>Q14. Inefficient Task Iteration (Lack of Concurrency)</h2>
+<pre>
+public async Task SyncAllStores(List&lt;Store&gt; stores)
+{
+    foreach (var store in stores)
+    {
+        await SyncStoreInventoryAsync(store);
+    }
+}
+</pre>
+<p><span class="bug">The Bug:</span> The loop executes sequentially. Store B's sync won't start until Store A's completes. If there are 500 stores, the API will take an extremely long time to respond.</p>
+<p><span class="fix">The Fix:</span> Project into tasks and await them concurrently: var tasks = stores.Select(SyncStoreInventoryAsync); await Task.WhenAll(tasks);</p>
+
+<h2>Q15. TransactionScope Async Context Loss</h2>
+<pre>
+using (var tx = new TransactionScope())
+{
+    await _db.Orders.AddAsync(order);
+    await _db.SaveChangesAsync();
+    tx.Complete();
+}
+</pre>
+<p><span class="bug">The Bug:</span> When an await resumes, it might resume on a different thread. Standard TransactionScope is bound to the local thread. This cross-thread continuation will throw a transaction exception.</p>
+<p><span class="fix">The Fix:</span> Pass TransactionScopeAsyncFlowOption.Enabled to the TransactionScope constructor.</p>
+
+<h2>Q16. Ambiguous API Routes</h2>
+<pre>
+[HttpGet("{barcode}")]
+public IActionResult GetByBarcode(string barcode) { ... }
+
+[HttpGet("{id}")]
+public IActionResult GetById(int id) { ... }
+</pre>
+<p><span class="bug">The Bug:</span> Both routes match the same URL pattern (e.g., /api/products/12345). The routing engine cannot determine which action to invoke and will throw an AmbiguousMatchException on runtime.</p>
+<p><span class="fix">The Fix:</span> Apply route constraints to distinguish types: [HttpGet("{id:int}")] vs [HttpGet("{barcode:alpha}")].</p>
+
+<h2>Q17. Missing State Tracking due to AsNoTracking</h2>
+<pre>
+var user = await _db.Users.AsNoTracking().FirstOrDefaultAsync(u => u.Id == 1);
+user.LastLogin = DateTime.UtcNow;
+await _db.SaveChangesAsync();
+</pre>
+<p><span class="bug">The Bug:</span> .AsNoTracking() tells EF Core to ignore state changes for the retrieved entity. The SaveChanges() call will do nothing because the DbContext is unaware of the modification.</p>
+<p><span class="fix">The Fix:</span> Remove .AsNoTracking() when you intend to update the entity, or explicitly call _db.Update(user).</p>
+
+<h2>Q18. Misordered Middleware Pipeline</h2>
+<pre>
+app.UseAuthorization();
+app.UseRouting();
+app.UseEndpoints(endpoints => { endpoints.MapControllers(); });
+</pre>
+<p><span class="bug">The Bug:</span> Authorization relies on knowing which endpoint is being executed to check route-specific policies. By placing UseAuthorization before UseRouting, the endpoint context hasn't been established yet, rendering policy checks useless.</p>
+<p><span class="fix">The Fix:</span> Always place app.UseRouting() immediately before app.UseAuthentication() and app.UseAuthorization().</p>
+
+<h2>Q19. Returning Null Instead of NotFound</h2>
+<pre>
+[HttpGet("discount/{code}")]
+public IActionResult GetDiscount(string code)
+{
+    var discount = _db.Discounts.SingleOrDefault(d => d.Code == code);
+    return Ok(discount);
+}
+</pre>
+<p><span class="bug">The Bug:</span> If the discount code does not exist, discount is null. Returning Ok(null) yields an HTTP 200 (Success) with an empty body, which violates RESTful principles and confuses client-side integrations.</p>
+<p><span class="fix">The Fix:</span> Add a null check and return an HTTP 404: if (discount == null) return NotFound(); return Ok(discount);</p>
+
+<h2>Q20. Memory Bloat with String Concatenation</h2>
+<pre>
+string csvReport = "Id,Amount,Date\n";
+foreach (var tx in hugeTransactionList)
+{
+    csvReport += $"{tx.Id},{tx.Amount},{tx.Date}\n";
+}
+return csvReport;
+</pre>
+<p><span class="bug">The Bug:</span> Strings are immutable in C#. Using += inside a large loop creates thousands of discarded string objects on the heap. If the resulting string exceeds 85KB, it lands in the Large Object Heap (LOH), leading to fragmentation and OutOfMemory errors.</p>
+<p><span class="fix">The Fix:</span> Use StringBuilder or, better yet, write directly to a StreamWriter or MemoryStream.</p>
+
+</body>
+</html>

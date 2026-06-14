@@ -1,0 +1,108 @@
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+xmlns:w="urn:schemas-microsoft-com:office:word"
+xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+<meta charset="utf-8">
+<title>Citykart API Architecture Exam</title>
+<style>
+body { font-family: 'Segoe UI', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: auto; padding: 20px;}
+h1 { color: #004085; border-bottom: 2px solid #004085; padding-bottom: 10px; }
+h2 { color: #333; font-size: 1.2em; margin-top: 30px; }
+.scenario { font-weight: bold; color: #0056b3; }
+.answer { background-color: #f8f9fa; padding: 15px; border-left: 4px solid #198754; margin-top: 10px; border-radius: 4px; }
+hr { border: 0; border-top: 1px solid #eee; margin: 30px 0; }
+</style>
+</head>
+<body>
+
+<h1>Citykart Technical Assessment: Section 3</h1>
+<p><strong>Topic: Scenario-Based API Design & Architecture</strong></p>
+<p>This document contains 20 high-complexity, scenario-based architecture questions tailored for Citykart's retail enterprise systems.</p>
+<hr>
+
+<h2>Q1. Caching / Stale Data</h2>
+<p><span class="scenario">Scenario:</span> Citykart decides to run a 50% off flash sale on all Winter Jackets. You update the price in the main database, but the mobile app (which reads from a Redis cache) still shows the old price. How do you design the API to ensure prices update instantly without disabling the cache entirely?</p>
+<div class="answer"><strong>Answer:</strong> Implement a <strong>Pub/Sub pattern</strong> (e.g., Redis Pub/Sub or RabbitMQ). When the pricing service updates the database, it publishes a <code>PriceUpdatedEvent</code>. The API nodes subscribe to this event and actively evict or overwrite <em>only</em> the specific cached keys for those jackets, ensuring immediate consistency without losing the performance benefits of caching the rest of the catalog.</div>
+
+<h2>Q2. Resilience</h2>
+<p><span class="scenario">Scenario:</span> During checkout, your Web API calls an external SMS gateway to send an OTP. The SMS gateway is currently experiencing intermittent 10-second timeouts, causing your checkout threads to hang and the API to crash. How do you solve this?</p>
+<div class="answer"><strong>Answer:</strong> Implement the <strong>Circuit Breaker</strong> and <strong>Retry patterns</strong> using a library like <strong>Polly</strong>. Set a strict timeout (e.g., 2 seconds). If the SMS service fails repeatedly, the circuit breaker opens, immediately returning a fallback response (like an email OTP or a generic error) instead of waiting for timeouts, saving your thread pool from exhaustion.</div>
+
+<h2>Q3. Concurrency</h2>
+<p><span class="scenario">Scenario:</span> Two customers, one in Delhi and one in Mumbai, try to buy the last "Citykart Denim Shirt" at the exact same millisecond. How do you prevent your API from overselling the item using Entity Framework Core?</p>
+<div class="answer"><strong>Answer:</strong> Use <strong>Optimistic Concurrency</strong>. Add a <code>[Timestamp]</code> (RowVersion) byte array to the <code>Inventory</code> entity. When both requests attempt to <code>SaveChangesAsync()</code>, EF Core will verify the RowVersion. The second request will fail with a <code>DbUpdateConcurrencyException</code>. The API should catch this exception and return a friendly "Out of Stock" message to the second customer.</div>
+
+<h2>Q4. API Versioning</h2>
+<p><span class="scenario">Scenario:</span> Citykart has 500 POS terminals running Version 1 of your API. You need to release Version 2 with breaking changes to the checkout JSON schema. How do you route traffic without breaking the old POS terminals?</p>
+<div class="answer"><strong>Answer:</strong> Implement <strong>API Versioning</strong> using <code>Microsoft.AspNetCore.Mvc.Versioning</code>. You can route this via the URL (e.g., <code>/api/v1/checkout</code> vs <code>/api/v2/checkout</code>) or via HTTP Headers (<code>x-api-version: 2.0</code>). The old POS terminals remain hardcoded to v1, while new apps integrate with v2.</div>
+
+<h2>Q5. Idempotency</h2>
+<p><span class="scenario">Scenario:</span> A customer has a weak internet connection. They tap "Pay Now", the payment goes through, but their phone drops the connection before receiving the API response. They tap "Pay Now" again. How do you prevent double-charging their credit card?</p>
+<div class="answer"><strong>Answer:</strong> Implement an <strong>Idempotency Key</strong>. The client app generates a unique GUID for the transaction and sends it in an HTTP header (e.g., <code>Idempotency-Key</code>). The API checks Redis to see if this key has already been processed. If yes, it returns the <em>cached success response</em> without hitting the payment gateway a second time.</div>
+
+<h2>Q6. Saga / Distributed Transactions</h2>
+<p><span class="scenario">Scenario:</span> In your microservices architecture, the <code>OrderService</code> successfully creates an order, but the <code>PaymentService</code> subsequently fails. How do you roll back the order creation since they don't share a database?</p>
+<div class="answer"><strong>Answer:</strong> Implement the <strong>Saga Pattern</strong>. Because you cannot use traditional ACID database transactions across microservices, the <code>PaymentService</code> must publish a <code>PaymentFailedEvent</code> to a message broker (like RabbitMQ). The <code>OrderService</code> listens for this event and executes a <strong>Compensating Transaction</strong> (e.g., changing the order status to "Cancelled" and releasing the reserved inventory).</div>
+
+<h2>Q7. Data Pagination</h2>
+<p><span class="scenario">Scenario:</span> The Store Manager portal has an endpoint <code>GET /api/transactions</code> that returns a store's sales history. As the table has grown to 5 million rows, using <code>.Skip(page * size).Take(size)</code> is timing out. How do you optimize the API pagination?</p>
+<div class="answer"><strong>Answer:</strong> Replace Offset/Limit pagination with <strong>Keyset Pagination (Cursor-based Pagination)</strong>. Instead of <code>Skip()</code>, you pass the ID (or Date) of the last viewed record: <code>.Where(t => t.Id > lastSeenId).Take(size)</code>. This allows the SQL engine to use the clustered index directly rather than scanning through millions of skipped rows.</div>
+
+<h2>Q8. Security / Auth</h2>
+<p><span class="scenario">Scenario:</span> A warehouse employee is terminated immediately, but their JWT access token is valid for another 12 hours. How do you block their API access right now?</p>
+<div class="answer"><strong>Answer:</strong> JWTs are stateless and cannot be natively "revoked." To solve this, maintain a <strong>Token Blacklist</strong> in a fast cache like Redis. When the user is fired, add their JWT's <code>jti</code> (JWT ID) to the blacklist. Add a custom middleware in your API to check the Redis blacklist before authorizing any request.</div>
+
+<h2>Q9. CQRS</h2>
+<p><span class="scenario">Scenario:</span> The "Product Details" screen requires complex SQL joins across 10 tables, making the <code>ProductController</code> incredibly slow. However, the <code>UpdateProduct</code> endpoint is very simple. How do you architect this for better performance?</p>
+<div class="answer"><strong>Answer:</strong> Use the <strong>CQRS (Command Query Responsibility Segregation)</strong> pattern. Separate your read models from your write models. Use a micro-ORM like Dapper to run highly optimized, raw SQL queries for the read operations (Queries), and keep Entity Framework Core for handling the complex business logic of write operations (Commands).</div>
+
+<h2>Q10. Webhook Verification</h2>
+<p><span class="scenario">Scenario:</span> Razorpay sends an HTTP POST webhook to your API confirming a customer paid for their cart. How do you prove this webhook actually came from Razorpay and not a hacker manually hitting your endpoint?</p>
+<div class="answer"><strong>Answer:</strong> <strong>HMAC Signature Verification</strong>. The payment provider will sign the webhook payload using a shared secret key and send the hash in a header (e.g., <code>x-razorpay-signature</code>). Your API must read the raw request body, hash it using your securely stored secret, and compare your hash to the header hash. If they match, the request is authentic.</div>
+
+<h2>Q11. Large File Uploads</h2>
+<p><span class="scenario">Scenario:</span> The marketing team is uploading a 2GB promotional video through your Web API. This consumes massive amounts of server RAM and blocks threads. How should you redesign this?</p>
+<div class="answer"><strong>Answer:</strong> Do not pass large files through the API. Implement <strong>Pre-signed URLs</strong>. The client requests an upload URL from your API. The API generates a secure, time-limited URL directly to your cloud storage (e.g., AWS S3 or Azure Blob Storage). The client then uploads the 2GB file <em>directly</em> to the cloud, bypassing your web servers completely.</div>
+
+<h2>Q12. Distributed Logging</h2>
+<p><span class="scenario">Scenario:</span> A customer reports an error during checkout. Your system involves the Gateway, Order API, Inventory API, and Billing API. How do you track this single user's flow across all logs to find where it failed?</p>
+<div class="answer"><strong>Answer:</strong> Implement a <strong>Correlation ID</strong>. When the request hits the API Gateway, generate a unique GUID and attach it to an HTTP header (e.g., <code>x-correlation-id</code>). Every microservice passes this header to the next service and includes it in every log entry (using Serilog/OpenTelemetry). You can then filter your centralized logs (e.g., Elasticsearch) by this ID to trace the exact request path.</div>
+
+<h2>Q13. Zero-Downtime Migrations</h2>
+<p><span class="scenario">Scenario:</span> You need to rename a database column from <code>ItemCode</code> to <code>SkuCode</code>. Citykart operates 24/7. How do you run this EF Core migration without breaking the live application during the deployment?</p>
+<div class="answer"><strong>Answer:</strong> Use the <strong>Expand and Contract pattern</strong>.<br>
+1. Expand: Create the new <code>SkuCode</code> column. Update the API to write to <em>both</em> columns but read from the old one.<br>
+2. Migrate: Run a script to copy old data to the new column.<br>
+3. Transition: Update the API to read/write <em>only</em> to the new column.<br>
+4. Contract: Drop the old <code>ItemCode</code> column in a final migration.</div>
+
+<h2>Q14. Background Processing</h2>
+<p><span class="scenario">Scenario:</span> The API needs to generate a PDF invoice and email it to the customer after checkout. Doing this synchronously adds 4 seconds to the API response time. How do you fix this?</p>
+<div class="answer"><strong>Answer:</strong> Offload the task to a <strong>Background Job Processor</strong> (like Hangfire or a RabbitMQ consumer). The API simply drops an <code>InvoiceRequested</code> message onto a queue and immediately returns a <code>202 Accepted</code> or <code>200 OK</code> to the user. A separate background worker picks up the message, generates the PDF, and sends the email without making the user wait.</div>
+
+<h2>Q15. Bulk Inserts</h2>
+<p><span class="scenario">Scenario:</span> A new clothing supplier sends a daily JSON catalog of 50,000 new items. Looping through and calling <code>_db.Products.Add()</code> followed by <code>SaveChanges()</code> takes 15 minutes. How do you speed this up?</p>
+<div class="answer"><strong>Answer:</strong> Standard EF Core tracks every single entity, which creates massive overhead. To optimize, use <code>SqlBulkCopy</code> (for raw ADO.NET), the <code>ExecuteSqlRaw</code> command, or an extension library like <code>EFCore.BulkExtensions</code> which can insert 50,000 rows in less than a second by bypassing the change tracker.</div>
+
+<h2>Q16. API Gateway Pattern</h2>
+<p><span class="scenario">Scenario:</span> Your mobile app currently makes 5 separate API calls to load the Home Screen (User Profile, Cart Count, Promotions, Categories, Recommendations). This is draining battery and acting slowly on 3G networks. Solution?</p>
+<div class="answer"><strong>Answer:</strong> Implement the <strong>BFF (Backend-for-Frontend) or API Gateway pattern</strong>. Create an aggregator endpoint on the server. The mobile app makes <em>one</em> request to the Gateway. The Gateway makes the 5 internal microservice calls concurrently over the fast internal network, aggregates the JSON, and sends one cohesive response back to the phone.</div>
+
+<h2>Q17. Health Checks</h2>
+<p><span class="scenario">Scenario:</span> Your application runs on 3 load-balanced servers. Server B loses connectivity to the SQL database, but the load balancer keeps sending traffic to it, causing errors. How do you stop this?</p>
+<div class="answer"><strong>Answer:</strong> Implement <strong>ASP.NET Core Health Checks</strong> (<code>app.UseHealthChecks</code>). Create a specific endpoint (e.g., <code>/health</code>) that actively pings the database. Configure the Load Balancer to poll this URL. If Server B's health check fails, the load balancer will automatically remove it from the pool until database connectivity is restored.</div>
+
+<h2>Q18. Rate Limiting</h2>
+<p><span class="scenario">Scenario:</span> A competitor is running a script against your <code>GET /api/prices</code> endpoint 1,000 times a second to scrape your pricing data, slowing down the server for real customers. How do you defend the API?</p>
+<div class="answer"><strong>Answer:</strong> Implement <strong>Rate Limiting / Throttling</strong>. In .NET 7+, use the built-in <code>Microsoft.AspNetCore.RateLimiting</code> middleware. Configure an IP-based sliding window policy (e.g., max 50 requests per minute per IP). If they exceed this, return an <code>HTTP 429 Too Many Requests</code> status code.</div>
+
+<h2>Q19. Testing</h2>
+<p><span class="scenario">Scenario:</span> You are writing a unit test for a service that calls the actual Google Maps API to verify a delivery address. You don't want your unit tests to actually hit the internet or incur billing charges. How do you test the logic?</p>
+<div class="answer"><strong>Answer:</strong> Do not mock <code>HttpClient</code> directly (it is difficult and bad practice). Instead, mock the <strong><code>HttpMessageHandler</code></strong>. Inject the mocked handler into a new <code>HttpClient</code> instance in your test arrangement. This allows you to intercept the outbound request and return a fake, hardcoded JSON response without ever touching the network.</div>
+
+<h2>Q20. Advanced Validation</h2>
+<p><span class="scenario">Scenario:</span> You have a <code>PromotionDto</code> with a <code>StartDate</code> and an <code>EndDate</code>. You need to validate that the End Date is strictly after the Start Date before it reaches the controller. How is this achieved?</p>
+<div class="answer"><strong>Answer:</strong> DataAnnotations like <code>[Required]</code> only validate single properties. For cross-property validation, either implement <code>IValidatableObject</code> on the DTO and write the logic in the <code>Validate</code> method, or use a robust library like <strong>FluentValidation</strong> to create a custom rule: <code>RuleFor(x => x.EndDate).GreaterThan(x => x.StartDate)</code>.</div>
+
+</body>
+</html>

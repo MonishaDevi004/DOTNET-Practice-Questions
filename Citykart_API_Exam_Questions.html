@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>High-Complexity C# & .NET API Assessment</title>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; line-height: 1.6; color: #333; max-width: 900px; margin: 0 auto; padding: 20px; }
+        h1 { color: #0056b3; border-bottom: 2px solid #eee; padding-bottom: 10px; }
+        .question-card { background: #f9f9f9; border: 1px solid #ddd; border-radius: 8px; padding: 20px; margin-bottom: 20px; }
+        .question-text { font-weight: bold; font-size: 1.1em; margin-bottom: 15px; }
+        .options { list-style-type: none; padding: 0; }
+        .options li { margin-bottom: 8px; }
+        details { margin-top: 15px; background: #eef7ff; padding: 10px; border-radius: 5px; border-left: 4px solid #0056b3; }
+        summary { font-weight: bold; cursor: pointer; color: #0056b3; }
+        .answer { margin-top: 10px; }
+        .correct-letter { font-weight: bold; color: #d9534f; }
+        code { background-color: #eee; padding: 2px 4px; border-radius: 4px; font-family: monospace; }
+    </style>
+</head>
+<body>
+
+    <h1>Section 1: Advanced C# & Web API Core Concepts</h1>
+
+    <!-- Question 1 -->
+    <div class="question-card">
+        <div class="question-text">1. In modern ASP.NET Core (e.g., .NET 6/8), what is the primary architectural consequence of using <code>ConfigureAwait(false)</code> in your API controllers?</div>
+        <ul class="options">
+            <li>A) It prevents deadlocks by forcing the continuation to run on the original synchronization context.</li>
+            <li>B) It has no significant impact on preventing deadlocks because ASP.NET Core does not have a SynchronizationContext.</li>
+            <li>C) It significantly increases CPU overhead due to rapid context switching.</li>
+            <li>D) It automatically disposes of the HttpRequest scope after the await completes.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: B</span></p>
+                <p>Unlike legacy ASP.NET (which used `AspNetSynchronizationContext`), ASP.NET Core removed the SynchronizationContext entirely to improve performance. Therefore, `ConfigureAwait(false)` is largely redundant in ASP.NET Core application code for avoiding deadlocks, though it's still best practice in class libraries to support legacy consumers.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 2 -->
+    <div class="question-card">
+        <div class="question-text">2. Which interface provides covariance in C# generics, allowing you to cast an <code>IEnumerable&lt;Derived&gt;</code> to an <code>IEnumerable&lt;Base&gt;</code>?</div>
+        <ul class="options">
+            <li>A) <code>IEnumerable&lt;in T&gt;</code></li>
+            <li>B) <code>IEnumerable&lt;out T&gt;</code></li>
+            <li>C) <code>ICollection&lt;T&gt;</code></li>
+            <li>D) <code>IList&lt;T&gt;</code></li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: B</span></p>
+                <p>The <code>out</code> keyword specifies that the type parameter is covariant (used only as a return type). <code>in</code> specifies contravariance (used only as input). <code>IEnumerable&lt;T&gt;</code> is defined as <code>IEnumerable&lt;out T&gt;</code>.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 3 -->
+    <div class="question-card">
+        <div class="question-text">3. When designing a high-performance Web API that needs to parse large blocks of text without allocating objects on the heap, which C# feature should you use?</div>
+        <ul class="options">
+            <li>A) <code>StringBuilder</code></li>
+            <li>B) <code>string.Intern</code></li>
+            <li>C) <code>Span&lt;T&gt;</code> and <code>ReadOnlySpan&lt;T&gt;</code></li>
+            <li>D) <code>MemoryStream</code></li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p><code>Span&lt;T&gt;</code> is a ref struct that provides type-safe, memory-safe access to contiguous regions of memory (stack, heap, or unmanaged) without requiring heap allocations, drastically reducing Garbage Collection pressure.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 4 -->
+    <div class="question-card">
+        <div class="question-text">4. What is the execution order of filters in the ASP.NET Core Web API pipeline?</div>
+        <ul class="options">
+            <li>A) Authorization, Action, Resource, Exception, Result</li>
+            <li>B) Resource, Authorization, Action, Result, Exception</li>
+            <li>C) Authorization, Resource, Action, Exception, Result</li>
+            <li>D) Action, Authorization, Resource, Result, Exception</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p>The correct pipeline order is: 1. Authorization filters, 2. Resource filters, 3. Action filters, 4. Exception filters, 5. Result filters. (Note: Exception filters run only if an unhandled exception occurs before the result is executed).</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 5 -->
+    <div class="question-card">
+        <div class="question-text">5. You have an endpoint that queries a database using Entity Framework Core. You want to avoid tracking the entities in the DbContext to improve read performance. What should you use?</div>
+        <ul class="options">
+            <li>A) <code>.AsNoTracking()</code></li>
+            <li>B) <code>.AsQueryable()</code></li>
+            <li>C) <code>.Include()</code></li>
+            <li>D) <code>ChangeTracker.Clear()</code></li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: A</span></p>
+                <p><code>AsNoTracking()</code> tells EF Core not to set up change tracking for the returned entities, saving memory and CPU cycles for read-only queries.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 6 -->
+    <div class="question-card">
+        <div class="question-text">6. In a DI container, you register a service using <code>AddTransient</code> that implements <code>IDisposable</code>. Who is responsible for calling <code>Dispose()</code> on this service?</div>
+        <ul class="options">
+            <li>A) The developer must manually cast and call Dispose in the controller.</li>
+            <li>B) The Garbage Collector will eventually finalize it, bypassing Dispose.</li>
+            <li>C) The DI container (Service Provider) automatically tracks and disposes of it at the end of the HTTP request scope.</li>
+            <li>D) Transient services cannot implement IDisposable.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p>The built-in IoC container automatically tracks objects it creates that implement <code>IDisposable</code>. When the <code>IServiceScope</code> is disposed (at the end of the HTTP request), all scoped and transient services created within that scope are disposed.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 7 -->
+    <div class="question-card">
+        <div class="question-text">7. When implementing the producer-consumer pattern in a high-throughput API, which modern thread-safe .NET construct is preferred over <code>BlockingCollection</code>?</div>
+        <ul class="options">
+            <li>A) <code>ConcurrentQueue&lt;T&gt;</code></li>
+            <li>B) <code>System.Threading.Channels</code></li>
+            <li>C) <code>SemaphoreSlim</code></li>
+            <li>D) <code>Mutex</code></li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: B</span></p>
+                <p><code>System.Threading.Channels</code> is an advanced, highly optimized, asynchronous abstraction for passing data between producers and consumers asynchronously, performing much better than the older, synchronous <code>BlockingCollection</code>.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 8 -->
+    <div class="question-card">
+        <div class="question-text">8. What is the fundamental difference between returning a <code>Task&lt;T&gt;</code> versus a <code>ValueTask&lt;T&gt;</code> from an API service method?</div>
+        <ul class="options">
+            <li>A) <code>ValueTask&lt;T&gt;</code> can run on multiple threads simultaneously.</li>
+            <li>B) <code>Task&lt;T&gt;</code> is a value type, whereas <code>ValueTask&lt;T&gt;</code> is a reference type.</li>
+            <li>C) <code>ValueTask&lt;T&gt;</code> avoids heap allocations if the asynchronous operation completes synchronously.</li>
+            <li>D) There is no difference; they compile to the exact same IL.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p><code>Task</code> is a class (reference type), meaning returning it allocates on the heap. <code>ValueTask</code> is a struct (value type). If a method frequently completes synchronously (e.g., retrieving data from a cache), returning <code>ValueTask</code> prevents unnecessary heap allocations.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 9 -->
+    <div class="question-card">
+        <div class="question-text">9. How do you correctly configure ASP.NET Core middleware to permanently short-circuit the request pipeline (preventing subsequent middleware from executing)?</div>
+        <ul class="options">
+            <li>A) Use <code>app.Use()</code> and do not call <code>next()</code> or <code>next.Invoke()</code>.</li>
+            <li>B) Call <code>next.Stop()</code> inside the middleware delegate.</li>
+            <li>C) Throw a <code>PipelineStopException</code>.</li>
+            <li>D) Use <code>app.Continue(false)</code>.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: A</span></p>
+                <p>Middleware is chained. By defining middleware with <code>app.Use</code> (or <code>app.Run</code>) and intentionally omitting the call to the <code>next</code> delegate, the pipeline short-circuits and begins processing the response back up the chain.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 10 -->
+    <div class="question-card">
+        <div class="question-text">10. In C# 9+, what is the functional advantage of using a <code>record class</code> over a standard <code>class</code> for DTOs (Data Transfer Objects)?</div>
+        <ul class="options">
+            <li>A) Records bypass Garbage Collection entirely.</li>
+            <li>B) Records provide built-in value-based equality and non-destructive mutation via the 'with' expression.</li>
+            <li>C) Records automatically encrypt sensitive properties during JSON serialization.</li>
+            <li>D) Records can only contain primitive data types.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: B</span></p>
+                <p>Records automatically synthesize methods for value equality (like <code>Equals</code> and <code>GetHashCode</code> based on properties) and support the <code>with</code> keyword for immutable copying, making them ideal for DTOs.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 11 -->
+    <div class="question-card">
+        <div class="question-text">11. What problem does injecting <code>IHttpClientFactory</code> solve compared to instantiating a new <code>HttpClient()</code> manually in every request?</div>
+        <ul class="options">
+            <li>A) It prevents thread pool starvation.</li>
+            <li>B) It bypasses SSL certificate validation.</li>
+            <li>C) It solves socket exhaustion and manages DNS refresh lifecycles automatically.</li>
+            <li>D) It increases the maximum payload size allowed by Kestrel.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p>Creating a new `HttpClient` per request can lead to socket exhaustion (sockets remaining in `TIME_WAIT` state). Conversely, using a single static `HttpClient` fails to respect DNS changes. `IHttpClientFactory` solves both by pooling and rotating `HttpMessageHandler` instances.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 12 -->
+    <div class="question-card">
+        <div class="question-text">12. You are managing state changes in EF Core. What happens if a concurrency conflict occurs (e.g., two users editing the same record)?</div>
+        <ul class="options">
+            <li>A) EF Core automatically overwrites the data with the last request (Last-in Wins).</li>
+            <li>B) EF Core throws an <code>InvalidOperationException</code> during mapping.</li>
+            <li>C) EF Core throws a <code>DbUpdateConcurrencyException</code> if a concurrency token is configured.</li>
+            <li>D) The database engine completely locks the table until restart.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p>If you configure a property (like a RowVersion or a specific field) as a concurrency token, EF Core includes it in the `WHERE` clause of the `UPDATE` statement. If 0 rows are affected, it throws `DbUpdateConcurrencyException` to allow your API to handle the conflict.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 13 -->
+    <div class="question-card">
+        <div class="question-text">13. In a high-traffic Web API, a user initiates a long-running data export but closes their browser before it finishes. How do you prevent your API from wasting resources finishing the task?</div>
+        <ul class="options">
+            <li>A) Implement a polling mechanism in JavaScript.</li>
+            <li>B) Use <code>GC.Collect()</code> proactively.</li>
+            <li>C) Inject and utilize a <code>CancellationToken</code> in the controller action and pass it to async methods.</li>
+            <li>D) Set a tight timeout on the Kestrel server.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p>ASP.NET Core binds <code>CancellationToken</code> to the HTTP request connection. If the client disconnects, the token is cancelled. Passing this token down to EF Core or external HTTP calls allows the operation to be safely aborted, freeing up threads.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 14 -->
+    <div class="question-card">
+        <div class="question-text">14. What is the difference between <code>IOptions&lt;T&gt;</code> and <code>IOptionsSnapshot&lt;T&gt;</code> when injecting configuration data?</div>
+        <ul class="options">
+            <li>A) IOptions is registered as Transient; IOptionsSnapshot is Singleton.</li>
+            <li>B) IOptions cannot read from appsettings.json; IOptionsSnapshot can.</li>
+            <li>C) IOptions reads data once on startup (Singleton); IOptionsSnapshot re-reads data per request if the underlying file changes (Scoped).</li>
+            <li>D) There is no difference; they are aliases.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p><code>IOptions</code> is a singleton and will not reflect changes made to `appsettings.json` while the app is running. <code>IOptionsSnapshot</code> is scoped and will pick up configuration changes on the next HTTP request.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 15 -->
+    <div class="question-card">
+        <div class="question-text">15. Why might a developer choose Minimal APIs over MVC Controllers in .NET 6+?</div>
+        <ul class="options">
+            <li>A) Minimal APIs bypass security middleware, making them faster.</li>
+            <li>B) Minimal APIs offer less overhead by avoiding controller reflection and heavy MVC routing features, yielding slightly higher throughput for microservices.</li>
+            <li>C) Minimal APIs are the only way to support HTTP/3.</li>
+            <li>D) Minimal APIs compile to WebAssembly natively.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: B</span></p>
+                <p>Minimal APIs provide a more direct, lower-overhead routing model. They avoid the memory and CPU overhead of discovering and instantiating Controller classes via reflection, resulting in better raw performance for simple microservices.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 16 -->
+    <div class="question-card">
+        <div class="question-text">16. When creating a custom exception handling middleware, what is the best format to return HTTP API errors to the client to comply with RFC 7807?</div>
+        <ul class="options">
+            <li>A) A raw plain-text stack trace.</li>
+            <li>B) A custom XML schema defined by your team.</li>
+            <li>C) Returning a <code>ProblemDetails</code> object.</li>
+            <li>D) Returning HTTP 200 OK with a JSON object containing <code>{"error": true}</code>.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p>ASP.NET Core has built-in support for <code>ProblemDetails</code>, which is the standardized (RFC 7807) machine-readable format for specifying errors in HTTP API responses (containing properties like type, title, status, and detail).</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 17 -->
+    <div class="question-card">
+        <div class="question-text">17. What causes "Thread Pool Starvation" in a .NET Web API application?</div>
+        <ul class="options">
+            <li>A) Having too many background worker services running.</li>
+            <li>B) Synchronously blocking asynchronous code using <code>.Result</code> or <code>.Wait()</code> on Tasks.</li>
+            <li>C) Configuring Dependency Injection incorrectly.</li>
+            <li>D) Using the <code>async</code> keyword on a method that doesn't use <code>await</code>.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: B</span></p>
+                <p>Calling `.Result` or `.Wait()` blocks the current thread until the async operation completes. If under load, the thread pool runs out of worker threads because they are all blocked waiting for async tasks to complete, causing the application to hang (starvation).</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 18 -->
+    <div class="question-card">
+        <div class="question-text">18. You are streaming a large sequence of database records to the client without loading them all into RAM at once. What return type should you use in C# 8.0+?</div>
+        <ul class="options">
+            <li>A) <code>List&lt;Task&gt;</code></li>
+            <li>B) <code>IEnumerable&lt;Task&lt;T&gt;&gt;</code></li>
+            <li>C) <code>IAsyncEnumerable&lt;T&gt;</code></li>
+            <li>D) <code>IQueryable&lt;T&gt;</code></li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p><code>IAsyncEnumerable&lt;T&gt;</code> (often used with <code>yield return</code> and <code>await foreach</code>) allows you to stream data asynchronously. The API will stream the JSON array to the client as records are fetched, keeping memory footprint low.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 19 -->
+    <div class="question-card">
+        <div class="question-text">19. In the context of JWT Authentication, where should the application store the secret key used to sign the tokens?</div>
+        <ul class="options">
+            <li>A) Hardcoded in the <code>Program.cs</code> file.</li>
+            <li>B) In the payload of the JWT itself.</li>
+            <li>C) Securely outside of source control, such as in Azure Key Vault or AWS Secrets Manager.</li>
+            <li>D) Inside a public static class variable.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: C</span></p>
+                <p>Symmetric signing keys must be kept strictly confidential. Storing them in code or public repositories is a critical security vulnerability. They should be retrieved at runtime from secure environment variables or dedicated secret management services.</p>
+            </div>
+        </details>
+    </div>
+
+    <!-- Question 20 -->
+    <div class="question-card">
+        <div class="question-text">20. What is the Large Object Heap (LOH) in .NET, and why is it a concern for high-performance Web APIs?</div>
+        <ul class="options">
+            <li>A) It stores all value types, causing stack overflow exceptions.</li>
+            <li>B) It stores objects larger than ~85,000 bytes. The LOH is not compacted by default during Garbage Collection, which can lead to memory fragmentation.</li>
+            <li>C) It is the memory segment dedicated strictly to database connection strings.</li>
+            <li>D) It is an obsolete feature removed in .NET 6.</li>
+        </ul>
+        <details>
+            <summary>View Answer & Explanation</summary>
+            <div class="answer">
+                <p><span class="correct-letter">Answer: B</span></p>
+                <p>Allocating large objects (like massive byte arrays or huge strings over 85KB) places them on the LOH. Because moving large chunks of memory is expensive, the GC doesn't normally compact the LOH, which can result in fragmented memory and eventual OutOfMemory exceptions in high-throughput scenarios.</p>
+            </div>
+        </details>
+    </div>
+
+</body>
+</html>
